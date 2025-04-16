@@ -1,0 +1,30 @@
+# 基础配置文件
+
+# 数据库配置
+database:
+  host: localhost
+  port: 5432
+  username: postgres
+  password: postgres
+  database: ai_service
+
+# Redis配置
+redis:
+  host: localhost
+  port: 6379
+  db: 0
+  password: ""
+
+# RabbitMQ配置
+rabbitmq:
+  host: localhost
+  port: 5672
+  username: guest
+  password: guest
+  virtual_host: /
+
+# 日志配置
+logging:
+  level: INFO
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  date_format: "%Y-%m-%d %H:%M:%S"

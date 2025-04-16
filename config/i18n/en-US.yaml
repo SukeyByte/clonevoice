@@ -1,0 +1,39 @@
+# English Language Pack
+
+common:
+  success: "Operation successful"
+  error: "Operation failed"
+  notFound: "Resource not found"
+  unauthorized: "Unauthorized access"
+  forbidden: "Access forbidden"
+  validation: "Data validation failed"
+
+user:
+  login:
+    success: "Login successful"
+    failed: "Login failed"
+    invalidCredentials: "Invalid username or password"
+  register:
+    success: "Registration successful"
+    failed: "Registration failed"
+    userExists: "User already exists"
+
+api:
+  request:
+    invalid: "Invalid request"
+    timeout: "Request timeout"
+  response:
+    error: "Server response error"
+
+file:
+  upload:
+    success: "File upload successful"
+    failed: "File upload failed"
+    invalidType: "Unsupported file type"
+    tooLarge: "File size exceeds limit"
+
+validation:
+  required: "{field} is required"
+  invalid: "{field} format is invalid"
+  tooLong: "{field} exceeds maximum length"
+  tooShort: "{field} below minimum length"
