@@ -1,3 +1,5 @@
+import os
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, UploadFile, File
 from sqlalchemy.orm import Session
 import json
@@ -13,40 +15,23 @@ router = APIRouter(prefix="/audio", tags=["audio"])
 logger = get_logger()
 mq_client = RabbitMQClient()
 
+base_path = '/home/featurize/clonevoice/uploads'
+
 @router.post("/upload")
-async def upload_audio(
-    file: UploadFile = File(...),
-    background_tasks: BackgroundTasks = None,
-    db: Session = Depends(get_db)
-):
-    """上传音频文件的API接口"""
+async def upload_audio(file: UploadFile = File(...)):
+    """Upload audio file and return saved path"""
     try:
-        # 保存上传的音频文件
-        upload_manager = FileUploadManager()
+        # Save uploaded audio file
+        upload_manager = FileUploadManager(base_path)
         file_info = await upload_manager.save_file(file, 'audio')
         
-        # 创建音频克隆任务
-        task_id = "audio_" + str(uuid.uuid4())
-        task_data = {
-            "task_id": task_id,
-            "status": "pending",
-            "file_info": file_info
+        return {
+            "status": "success",
+            "file_path": file_info["file_path"]
         }
         
-        # 将任务信息存入Redis
-        redis_client = RedisClient.get_client()
-        redis_client.set(f"task:{task_id}", json.dumps(task_data))
-        
-        # 发送任务到音频服务
-        mq_client.publish(
-            exchange="ai_service",
-            routing_key="audio",
-            message=json.dumps(task_data)
-        )
-        
-        return {"task_id": task_id, "message": "音频文件上传成功，克隆任务已提交", "file_info": file_info}
     except Exception as e:
-        logger.error(f"音频文件上传失败: {str(e)}")
+        logger.error(f"Error uploading audio: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/clone")
@@ -80,56 +65,58 @@ async def clone_audio(background_tasks: BackgroundTasks, db: Session = Depends(g
 async def list_audios(
     page: int = 1,
     page_size: int = 10,
-    status: str = None,
     start_time: str = None,
-    end_time: str = None,
-    db: Session = Depends(get_db)
+    end_time: str = None
 ):
-    """获取音频任务列表"""
+    """List all audio files with pagination"""
     try:
-        redis_client = RedisClient.get_client()
-        # 构建查询条件
-        query_key = f"audio_list:{page}:{page_size}"
-        if status:
-            query_key += f":{status}"
-        if start_time:
-            query_key += f":{start_time}"
-        if end_time:
-            query_key += f":{end_time}"
+        audio_path = base_path + '/audio'
+        if not os.path.exists(audio_path):
+            return {
+                "status": "success",
+                "total": 0,
+                "page": page,
+                "page_size": page_size,
+                "data": []
+            }
+
+        audio_files = []
+        for filename in os.listdir(audio_path):
+            file_path = os.path.join(audio_path, filename)
+            stats = os.stat(file_path)
             
-        # 尝试从缓存获取结果
-        cached_result = redis_client.get(query_key)
-        if cached_result:
-            return json.loads(cached_result)
+            file_info = {
+                "filename": filename,
+                "file_path": file_path,
+                "size": stats.st_size,
+                "created_at": datetime.fromtimestamp(stats.st_ctime).isoformat(),
+                "modified_at": datetime.fromtimestamp(stats.st_mtime).isoformat()
+            }
             
-        # 从Redis中获取所有任务
-        tasks = []
-        for key in redis_client.scan_iter("task:audio_*"):
-            task_data = json.loads(redis_client.get(key))
-            # 应用过滤条件
-            if status and task_data.get("status") != status:
+            # Apply time filters if specified
+            if start_time and file_info["created_at"] < start_time:
                 continue
-            tasks.append(task_data)
-            
-        # 按创建时间倒序排序
-        tasks.sort(key=lambda x: x.get("file_info", {}).get("created_at", ""), reverse=True)
+            if end_time and file_info["created_at"] > end_time:
+                continue
+                
+            audio_files.append(file_info)
+
+        # Sort by creation time
+        audio_files.sort(key=lambda x: x["created_at"], reverse=True)
         
-        # 分页处理
+        # Apply pagination
         start_idx = (page - 1) * page_size
         end_idx = start_idx + page_size
-        paginated_tasks = tasks[start_idx:end_idx]
+        paginated_files = audio_files[start_idx:end_idx]
         
-        result = {
-            "total": len(tasks),
+        return {
+            "status": "success",
+            "total": len(audio_files),
             "page": page,
             "page_size": page_size,
-            "data": paginated_tasks
+            "data": paginated_files
         }
         
-        # 缓存结果（设置60秒过期）
-        redis_client.setex(query_key, 60, json.dumps(result))
-        
-        return result
     except Exception as e:
-        logger.error(f"获取音频列表失败: {str(e)}")
+        logger.error(f"Error listing audio files: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

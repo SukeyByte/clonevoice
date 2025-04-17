@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, UploadFi
 from sqlalchemy.orm import Session
 import json
 import uuid
+import os
+from datetime import datetime
 
 from common.database import get_db
 from common.redis_client import RedisClient
@@ -13,40 +15,22 @@ router = APIRouter(prefix="/video", tags=["video"])
 logger = get_logger()
 mq_client = RabbitMQClient()
 
+base_path = '/home/featurize/clonevoice/uploads'
+
 @router.post("/upload")
-async def upload_video(
-    file: UploadFile = File(...),
-    background_tasks: BackgroundTasks = None,
-    db: Session = Depends(get_db)
-):
-    """上传视频文件的API接口"""
+async def upload_video(file: UploadFile = File(...)):
+    """Upload video file and return saved path"""
     try:
-        # 保存上传的视频文件
-        upload_manager = FileUploadManager()
+        upload_manager = FileUploadManager(base_path)
         file_info = await upload_manager.save_file(file, 'video')
         
-        # 创建视频生成任务
-        task_id = "video_" + str(uuid.uuid4())
-        task_data = {
-            "task_id": task_id,
-            "status": "pending",
-            "file_info": file_info
+        return {
+            "status": "success",
+            "file_path": file_info["file_path"]
         }
         
-        # 将任务信息存入Redis
-        redis_client = RedisClient.get_client()
-        redis_client.set(f"task:{task_id}", json.dumps(task_data))
-        
-        # 发送任务到视频服务
-        mq_client.publish(
-            exchange="ai_service",
-            routing_key="video",
-            message=json.dumps(task_data)
-        )
-        
-        return {"task_id": task_id, "message": "视频文件上传成功，生成任务已提交", "file_info": file_info}
     except Exception as e:
-        logger.error(f"视频文件上传失败: {str(e)}")
+        logger.error(f"Error uploading video: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/generate")
@@ -80,56 +64,58 @@ async def generate_video(background_tasks: BackgroundTasks, db: Session = Depend
 async def list_videos(
     page: int = 1,
     page_size: int = 10,
-    status: str = None,
     start_time: str = None,
-    end_time: str = None,
-    db: Session = Depends(get_db)
+    end_time: str = None
 ):
-    """获取视频任务列表"""
+    """List all video files with pagination"""
     try:
-        redis_client = RedisClient.get_client()
-        # 构建查询条件
-        query_key = f"video_list:{page}:{page_size}"
-        if status:
-            query_key += f":{status}"
-        if start_time:
-            query_key += f":{start_time}"
-        if end_time:
-            query_key += f":{end_time}"
+        video_path = base_path + '/video'
+        if not os.path.exists(video_path):
+            return {
+                "status": "success",
+                "total": 0,
+                "page": page,
+                "page_size": page_size,
+                "data": []
+            }
+
+        video_files = []
+        for filename in os.listdir(video_path):
+            file_path = os.path.join(video_path, filename)
+            stats = os.stat(file_path)
             
-        # 尝试从缓存获取结果
-        cached_result = redis_client.get(query_key)
-        if cached_result:
-            return json.loads(cached_result)
+            file_info = {
+                "filename": filename,
+                "file_path": file_path,
+                "size": stats.st_size,
+                "created_at": datetime.fromtimestamp(stats.st_ctime).isoformat(),
+                "modified_at": datetime.fromtimestamp(stats.st_mtime).isoformat()
+            }
             
-        # 从Redis中获取所有任务
-        tasks = []
-        for key in redis_client.scan_iter("task:video_*"):
-            task_data = json.loads(redis_client.get(key))
-            # 应用过滤条件
-            if status and task_data.get("status") != status:
+            # Apply time filters
+            if start_time and file_info["created_at"] < start_time:
                 continue
-            tasks.append(task_data)
-            
-        # 按创建时间倒序排序
-        tasks.sort(key=lambda x: x.get("file_info", {}).get("created_at", ""), reverse=True)
+            if end_time and file_info["created_at"] > end_time:
+                continue
+                
+            video_files.append(file_info)
+
+        # Sort by creation time
+        video_files.sort(key=lambda x: x["created_at"], reverse=True)
         
-        # 分页处理
+        # Pagination
         start_idx = (page - 1) * page_size
         end_idx = start_idx + page_size
-        paginated_tasks = tasks[start_idx:end_idx]
+        paginated_files = video_files[start_idx:end_idx]
         
-        result = {
-            "total": len(tasks),
+        return {
+            "status": "success",
+            "total": len(video_files),
             "page": page,
             "page_size": page_size,
-            "data": paginated_tasks
+            "data": paginated_files
         }
         
-        # 缓存结果（设置60秒过期）
-        redis_client.setex(query_key, 60, json.dumps(result))
-        
-        return result
     except Exception as e:
-        logger.error(f"获取视频列表失败: {str(e)}")
+        logger.error(f"Error listing video files: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

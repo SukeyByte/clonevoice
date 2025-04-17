@@ -32,3 +32,28 @@ class RedisClient:
         if cls._instance is not None:
             cls._instance.close()
             cls._instance = None
+
+    async def set(self, key: str, value: str, expire: int = None) -> bool:
+        self.get_client()
+        try:
+            await self.redis.set(key, value)
+            if expire:
+                await self.redis.expire(key, expire)
+            return True
+        except Exception as e:
+            print(f"Redis set error: {str(e)}")
+            return False
+            
+    async def get(self, key: str) -> Optional[str]:
+        self.get_client()
+        try:
+            value = await self.redis.get(key)
+            return value.decode('utf-8') if value else None
+        except Exception as e:
+            print(f"Redis get error: {str(e)}")
+            return None
+            
+    async def close(self):
+        if self.redis:
+            self.redis.close()
+            await self.redis.wait_closed()
