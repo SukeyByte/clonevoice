@@ -3,6 +3,7 @@ import re
 class TextProcessor:
     @staticmethod
     def split_text(text: str) -> list:
+        return [text]
         """将文本按标点符号分段"""
         # 使用标点符号分割文本
         segments = re.split('[，。！？,.!?]', text)

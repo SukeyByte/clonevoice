@@ -31,7 +31,7 @@ app = FastAPI(title="Video Generation Service", version="1.0.0")
 # 初始化RabbitMQ客户端
 mq_client = RabbitMQClient()
 
-from task_handler.video_task_handler import VideoTaskHandler
+from video_service.task_handler.video_task_handler import VideoTaskHandler
 
 # 初始化视频任务处理器
 video_task_handler = VideoTaskHandler()
@@ -62,4 +62,6 @@ async def shutdown_event():
 
 if __name__ == "__main__":
     port = int(os.getenv("VIDEO_SERVICE_PORT", 8001))
-    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
+    uvicorn.run("video_service.main:app", host="0.0.0.0", port=port, reload=True)
+    # task = {'task_id': 'fa11e4ed-2ccf-41f6-ba07-105e815bb4d8', 'status': '2', 'text': 'Halo! Selamat datang di sesi pengetahuan finansial bersama kami.', 'video_path': '/home/featurize/clonevoice/uploads/video/347fb1d0-8812-4883-a7dc-82e6df4c1573.mp4', 'audio_path': '/home/featurize/clonevoice/uploads/audio/fdf73042-3459-4958-abf8-44d6b75a0cec.wav', 'audio_output_path': 'output/audio_fa11e4ed-2ccf-41f6-ba07-105e815bb4d8.wav'}
+    # video_task_handler.process_video_task(task)

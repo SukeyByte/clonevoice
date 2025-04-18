@@ -8,11 +8,8 @@ from common.logger import get_logger
 logger = get_logger()
 
 class MessagePusher:
-    def __init__(self):
-        self.redis_client = RedisClient.get_client()
-        self.message_expire_time = 3600  # 消息在Redis中的过期时间（秒）
     
-    def push_message(self, task_id: str, message: Dict[str, Any], event_type: str = "status") -> bool:
+    def push_message(self, task_id: str, message: str, event_type: str = "status") -> bool:
         """
         推送消息到Redis并返回是否成功
         :param task_id: 任务ID
@@ -22,15 +19,17 @@ class MessagePusher:
         """
         try:
             # 添加时间戳
-            message["timestamp"] = datetime.now().isoformat()
-            message["event_type"] = event_type
+            result = {}
+            result["timestamp"] = datetime.now().isoformat()
+            result["event_type"] = event_type
+            result["message"] = message
             
             # 存储到Redis
             redis_key = f"message:{task_id}"
-            self.redis_client.set(
+            redis_client = RedisClient.get_client()
+            redis_client.set(
                 redis_key,
-                json.dumps(message),
-                ex=self.message_expire_time
+                json.dumps(result)
             )
             
             logger.info(f"消息推送成功: {task_id} - {message}")

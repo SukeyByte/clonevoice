@@ -1,5 +1,6 @@
 import json
 import os
+import torch
 from pathlib import Path
 from threading import Thread
 from TTS.api import TTS
@@ -41,12 +42,12 @@ class AudioTaskHandler:
                     reference_audio = str(wav_reference)
                     task_data["reference_audio_wav"] = str(wav_reference)
                     self.redis_client.set(f"task:{task_id}", json.dumps(task_data))
-
+            device = torch.device('cuda:0')
             # 初始化TTS引擎
             tts = TTS(
                 model_path="/home/featurize/training/tts_models/nl/mozilla/xtts/",
                 config_path="/home/featurize/training/tts_models/nl/mozilla/xtts/config.json"
-            )
+            ).to(device)
 
             # 分段处理文本
             text = task_data.get("text", "")
@@ -84,7 +85,7 @@ class AudioTaskHandler:
             if success:
                 # 更新任务状态为完成
                 task_data["status"] = "2"
-                task_data["output_path"] = str(final_output)
+                task_data["audio_output_path"] = str(final_output)
                 self.redis_client.set(f"task:{task_id}", json.dumps(task_data))
 
                 # 发送SSE通知
