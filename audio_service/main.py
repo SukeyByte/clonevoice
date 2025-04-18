@@ -1,3 +1,9 @@
+import sys
+import os
+
+# Add the parent directory to the Python path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from fastapi import FastAPI
 from dotenv import load_dotenv
 import uvicorn
@@ -9,7 +15,7 @@ from threading import Thread
 from common.redis_client import RedisClient
 from common.rabbitmq_client import RabbitMQClient
 from common.logger import setup_logger, get_logger
-from task_handler.audio_task_handler import AudioTaskHandler
+from audio_service.task_handler.audio_task_handler import AudioTaskHandler
 
 # 加载环境变量
 load_dotenv()
@@ -48,4 +54,4 @@ async def shutdown_event():
 
 if __name__ == "__main__":
     port = int(os.getenv("AUDIO_SERVICE_PORT", 8002))
-    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
+    uvicorn.run("audio_service.main:app", host="0.0.0.0", port=port, reload=True)

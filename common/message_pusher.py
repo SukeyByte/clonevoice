@@ -26,7 +26,7 @@ class MessagePusher:
             message["event_type"] = event_type
             
             # 存储到Redis
-            redis_key = f"task:{task_id}"
+            redis_key = f"message:{task_id}"
             self.redis_client.set(
                 redis_key,
                 json.dumps(message),

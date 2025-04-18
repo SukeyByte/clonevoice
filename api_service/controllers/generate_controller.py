@@ -23,7 +23,7 @@ async def create_generation_task(request: GenerationRequest):
         # Create task data
         task_data = {
             "task_id": task_id,
-            "status": "pending",
+            "status": "0",
             "text": request.text,
             "video_path": request.video_path,
             "audio_path": request.audio_path
@@ -35,14 +35,19 @@ async def create_generation_task(request: GenerationRequest):
         
         # Send to RabbitMQ
         rabbitmq_client = RabbitMQClient()
+
+        rabbitmq_client.declare_exchange("ai_service")
+        rabbitmq_client.declare_queue("audio_tasks")
+        rabbitmq_client.bind_queue("audio_tasks", "ai_service", "audio_tasks")
+
         rabbitmq_client.publish(
-            "audio_queue",
-            "task",
+            "ai_service",
+            "audio_tasks",
             json.dumps(task_data)
         )
         
         logger.info(f"Created generation task: {task_id}")
-        return {"task_id": task_id, "status": "pending"}
+        return {"task_id": task_id, "status": "0"}# status 0 start, 1 audio start 2 video start 3 finish
         
     except Exception as e:
         logger.error(f"Error creating generation task: {str(e)}")

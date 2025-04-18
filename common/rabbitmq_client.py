@@ -33,6 +33,8 @@ class RabbitMQClient:
     def publish(self, exchange: str, routing_key: str, message: str) -> None:
         """发布消息到指定的交换机和路由键"""
         try:
+            if not self.connection or self.connection.is_closed:
+                self.connect()
             self.channel.basic_publish(
                 exchange=exchange,
                 routing_key=routing_key,
