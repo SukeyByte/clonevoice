@@ -12,7 +12,7 @@ logger = get_logger()
 class VideoTaskHandler:
     def __init__(self):
         self.redis_client = RedisClient.get_client()
-        self.output_dir = Path("output")
+        self.output_dir = Path("uploads/out_video")
         self.temp_dir = self.output_dir / "temp"
         self.video_dir = Path("videos")
         
@@ -44,7 +44,7 @@ class VideoTaskHandler:
 
             # 生成唇形同步视频
             MessagePusher.push_message(task_id, "video_generating","3")
-            
+            print(output_path)
             self._generate_sync_video(
                 audio_path=audio_path,
                 video_path=video_path,
@@ -53,8 +53,22 @@ class VideoTaskHandler:
 
             # 更新任务状态为完成
             task_data["video_output_path"] = str(output_path)
+            task_data["status"] = "4"
+            task_data["end_time"] = "4"
             MessagePusher.push_message(task_id, "video_done","4")
 
+            rabbitmq_client = RabbitMQClient()
+            rabbitmq_client.declare_exchange("ai_service")
+            rabbitmq_client.declare_queue("api_tasks")
+            rabbitmq_client.bind_queue("api_tasks", "ai_service", "api_tasks")
+            rabbitmq_client.publish(
+                    exchange="ai_service",
+                    routing_key="api_tasks",
+                    message=json.dumps(task_data)
+                )
+            
+            logger.info(f'task_data:{task_data}')
+            self.redis_client.set(f"task:{task_id}", json.dumps(task_data))
             logger.info(f"视频生成任务完成: {task_id}")
 
         except Exception as e:
@@ -70,8 +84,8 @@ class VideoTaskHandler:
             temp_dir.mkdir(parents=True, exist_ok=True)
             
             # 配置生成参数
-            guidance_scale = 7.5  # 控制生成效果的指导尺度
-            inference_steps = 50  # 推理步数
+            guidance_scale = 1  # 控制生成效果的指导尺度
+            inference_steps = 20  # 推理步数
             seed = 42  # 随机种子，保证结果可复现
             
             # 初始化生成器并处理视频
@@ -101,6 +115,6 @@ class VideoTaskHandler:
             task_data = json.loads(body)
             print(task_data)
             # 在新线程中处理任务，避免阻塞消息队列
-            Thread(target=self.process_video_task, args=(task_data,)).start()
+            self.process_video_task(task_data)
         except Exception as e:
             logger.error(f"处理视频任务消息失败: {str(e)}")

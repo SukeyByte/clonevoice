@@ -48,8 +48,9 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     """服务关闭时的处理"""
-    RedisClient.close()
     mq_client.close()
+    RedisClient.close()
+    
     logger.info("音频克隆服务关闭")
 
 if __name__ == "__main__":

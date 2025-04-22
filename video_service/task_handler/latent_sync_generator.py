@@ -16,8 +16,8 @@ class LatentSyncGenerator:
         video_path: str,
         audio_path: str,
         output_path: str = None,
-        guidance_scale: float = 7.5,
-        inference_steps: int = 50,
+        guidance_scale: float = 2,
+        inference_steps: int = 20,
         seed: int = 42,
     ):
         """Process video with LatentSync model"""

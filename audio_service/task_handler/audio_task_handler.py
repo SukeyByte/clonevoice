@@ -45,8 +45,8 @@ class AudioTaskHandler:
             device = torch.device('cuda:0')
             # 初始化TTS引擎
             tts = TTS(
-                model_path="/home/featurize/training/tts_models/nl/mozilla/xtts/",
-                config_path="/home/featurize/training/tts_models/nl/mozilla/xtts/config.json"
+                model_path="/home/featurize/training/tts_models/nl/mozilla/xtts2/",
+                config_path="/home/featurize/training/tts_models/nl/mozilla/xtts2/config.json"
             ).to(device)
 
             # 分段处理文本
