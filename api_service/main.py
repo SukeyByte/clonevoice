@@ -41,14 +41,12 @@ from contextlib import asynccontextmanager
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("API服务启动")
-    loop = asyncio.get_event_loop()
-    loop.create_task(handle_mq_messages())  # 启动消息监听
     yield
     mq_client.close()
     RedisClient.close()
     logger.info("API服务关闭")
 
-app = FastAPI(title="AI Service API", version="1.0.0")
+app = FastAPI(title="AI Service API", version="1.0.0", lifespan=lifespan)
 
 # 配置CORS
 app.add_middleware(
@@ -86,41 +84,17 @@ async def broadcast_message(message: dict):
     for queue in connected_clients:
         await queue.put(message)
 
-# 处理来自RabbitMQ的消息
-async def handle_mq_messages():
-    """消息处理后台任务"""
-    try:
-        def callback(ch, method, properties, body):
-            message = json.loads(body)
-            asyncio.create_task(broadcast_message({
-                "event_type": "message", 
-                "message": message
-            }))
-            
-        # 确保队列和绑定都正确设置
-        mq_client.declare_queue("api_tasks")
-        mq_client.bind_queue("api_tasks", "ai_service", "api_tasks")
-        mq_client.consume("api_tasks", callback)
-        # 保持连接存活
-        while True:
-            await asyncio.sleep(1)
-            
-    except Exception as e:
-        logger.error(f"消息处理错误: {str(e)}")
-        # 重新连接
-        mq_client.reconnect()
-
 @app.post("/send_event")
 async def send_event(request: Request):
-    print(request)
-    """模拟推送事件接口"""
+    """推送事件接口"""
     try:
         message = await request.json()
+        print(f'request:{message}')
         if not connected_clients:
             return JSONResponse(content={"status": "No connected clients."})
         
         # 广播消息给所有客户端
-        await broadcast_message(message)
+        await broadcast_message({'event_type':'message','message':message})
         
         return JSONResponse(content={"status": "Message sent.", "message": message})
     
@@ -168,33 +142,6 @@ def custom_openapi():
 
 app.openapi = custom_openapi
 
-
-# 导入消息推送器
-from common.message_pusher import message_pusher
-
-@app.get("/task/{task_id}/status")
-async def get_task_status(task_id: str):
-    """获取任务状态的SSE接口"""
-    async def event_generator():
-        while True:
-            # 从消息推送器获取任务状态
-            task_info = message_pusher.get_message(task_id)
-            if task_info:
-                yield {
-                    "event": task_info.get("event_type", "status"),
-                    "data": json.dumps(task_info)
-                }
-                
-                # 如果任务完成或失败，结束SSE连接
-                if task_info.get("status") in ["completed", "failed"]:
-                    break
-            
-            await asyncio.sleep(1)
-    
-    return EventSourceResponse(event_generator())
-
 if __name__ == "__main__":
     port = int(os.getenv("API_SERVICE_PORT", 8000))
-    print("服务启动", flush=True)
     uvicorn.run("api_service.main:app", host="0.0.0.0", port=port, reload=True)
-    logger.info("API服务启动启动成功")        

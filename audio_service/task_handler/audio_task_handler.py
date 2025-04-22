@@ -16,11 +16,13 @@ logger = get_logger()
 class AudioTaskHandler:
     def __init__(self):
         self.redis_client = RedisClient.get_client()
-        self.output_dir = Path("output")
+        self.output_dir = Path("uploads")
+        self.finial_dir = self.output_dir / "out_audio"
         self.temp_dir = self.output_dir / "temp"
         
         # 确保输出目录存在
         self.output_dir.mkdir(exist_ok=True)
+        self.finial_dir.mkdir(exist_ok=True)
         self.temp_dir.mkdir(exist_ok=True)
 
     def process_audio_task(self, task_data: dict):
@@ -72,7 +74,7 @@ class AudioTaskHandler:
                 segment_files.append(str(temp_path))
 
             # 合并所有音频片段
-            final_output = self.output_dir / f"audio_{task_id}.wav"
+            final_output = self.finial_dir / f"audio_{task_id}.wav"
             if len(segment_files) > 1:
                 success = AudioConverter.merge_audio_files(segment_files, str(final_output))
             elif len(segment_files) == 1:
@@ -87,9 +89,10 @@ class AudioTaskHandler:
                 task_data["status"] = "2"
                 task_data["audio_output_path"] = str(final_output)
                 self.redis_client.set(f"task:{task_id}", json.dumps(task_data))
-
+                url = str(final_output).replace("uploads", "static")
                 # 发送SSE通知
-                MessagePusher.push_message(task_id,"audio_task_completed","1")
+                MessagePusher.push_message(task_id,
+                                           f"audio_task_completed,path:<a>{url}</a>","1")
 
                 # 发送MQ消息通知视频服务
                 rabbitmq_client = RabbitMQClient()

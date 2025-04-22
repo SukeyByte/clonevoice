@@ -1,4 +1,5 @@
 import json
+import requests
 from typing import Dict, Any, Optional
 from datetime import datetime, timedelta
 
@@ -8,7 +9,27 @@ from common.logger import get_logger
 logger = get_logger()
 
 class MessagePusher:
-    
+    def send_event_notification(self, task_id: str) -> bool:
+        """
+        发送事件通知到本地API服务
+        """
+        try:            
+            response = requests.post(
+                "http://localhost:8000/send_event",
+                json={'message':task_id}
+            )
+
+            if response.status_code == 200:
+                logger.info(f"事件通知发送成功: {task_id}")
+                return True
+            else:
+                logger.error(f"事件通知发送失败: {task_id} - 状态码: {response.status_code}")
+                return False
+                    
+        except Exception as e:
+            logger.error(f"事件通知发送失败: {task_id} - {str(e)}")
+            return False
+
     def push_message(self, task_id: str, message: str, event_type: str = "status") -> bool:
         """
         推送消息到Redis并返回是否成功
@@ -31,7 +52,10 @@ class MessagePusher:
                 redis_key,
                 json.dumps(result)
             )
-            
+
+            # 创建事件循环来运行异步方法
+            message_pusher.send_event_notification(task_id)
+
             logger.info(f"消息推送成功: {task_id} - {message}")
             return True
         except Exception as e:

@@ -5,7 +5,6 @@ from threading import Thread
 from common.redis_client import RedisClient
 from common.logger import get_logger
 from common.message_pusher import MessagePusher
-from common.rabbitmq_client import RabbitMQClient
 
 logger = get_logger()
 
@@ -55,17 +54,9 @@ class VideoTaskHandler:
             task_data["video_output_path"] = str(output_path)
             task_data["status"] = "4"
             task_data["end_time"] = "4"
-            MessagePusher.push_message(task_id, "video_done","4")
-
-            rabbitmq_client = RabbitMQClient()
-            rabbitmq_client.declare_exchange("ai_service")
-            rabbitmq_client.declare_queue("api_tasks")
-            rabbitmq_client.bind_queue("api_tasks", "ai_service", "api_tasks")
-            rabbitmq_client.publish(
-                    exchange="ai_service",
-                    routing_key="api_tasks",
-                    message=json.dumps(task_data)
-                )
+            url = str(output_path).replace("uploads", "static")
+            MessagePusher.push_message(task_id, 
+                                       f"video generate finish, path : <a>{url}</a>","4")
             
             logger.info(f'task_data:{task_data}')
             self.redis_client.set(f"task:{task_id}", json.dumps(task_data))
